@@ -17,9 +17,9 @@ T = arr.shape[0]
 t1 = int(T * 0.7)
 t2 = int(T * 0.9)
 
-np.save("Wiki/wiki_train.npy", arr[:t1])
-np.save("Wiki/wiki_val.npy", arr[t1:t2])
-np.save("Wiki/wiki_test.npy", arr[t2:])
+np.save("Wiki/train.npy", arr[:t1])
+np.save("Wiki/val.npy", arr[t1:t2])
+np.save("Wiki/test.npy", arr[t2:])
 json.dump({
     "cols": df.index.tolist(),
     "mean": mean.flatten().tolist(),
