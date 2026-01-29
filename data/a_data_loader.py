@@ -55,3 +55,4 @@ class Dataset_DHFM(Dataset):
             return len(self.valData) - self.seq_len - self.pre_len
         if self.flag == 'test':
             return len(self.testData) - self.seq_len - self.pre_len
+        
