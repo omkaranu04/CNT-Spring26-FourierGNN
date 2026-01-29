@@ -36,12 +36,12 @@ if not os.path.exists(result_test_file):
     os.makedirs(result_test_file)
     
 data_parser = {
-    'ECG':{'root_path':'data/ECG', 'type':'0'},
-    'COVID':{'root_path':'data/COVID', 'type':'1'},
-    'electricity':{'root_path':'data/Electricity', 'type':'1'},
-    'wiki':{'root_path':'data/Wiki', 'type':'1'},
-    'metr':{'root_path':'data/METR-LA', 'type':'1'},
-    'solar':{'root_path':'data/Solar', 'type':'1'}
+    'ECG':{'root_path':'./data/ECG', 'type':'0'},
+    'Covid':{'root_path':'./data/Covid', 'type':'1'},
+    'electricity':{'root_path':'./data/Electricity', 'type':'1'},
+    'wiki':{'root_path':'./data/Wiki', 'type':'1'},
+    'metr':{'root_path':'./data/METR-LA', 'type':'1'},
+    'solar':{'root_path':'./data/Solar', 'type':'1'}
 }
 
 if args.data in data_parser.keys():
@@ -51,7 +51,7 @@ data_dict = {
     'ECG': Dataset_ECG,
     'wiki': Dataset_Wiki,
     'solar': Dataset_Solar,
-    'COVID': Dataset_DHFM,
+    'Covid': Dataset_DHFM,
     'electricity': Dataset_DHFM,
     'metr': Dataset_DHFM
 }

@@ -8,3 +8,6 @@ CNT Project Description.pdf
 /data/METR-LA
 /data/Solar
 /data/Wiki
+/__pycache__
+*.pyc
+/output
