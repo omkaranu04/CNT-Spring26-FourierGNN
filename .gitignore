@@ -2,12 +2,13 @@
 CNT Project Description.pdf
 /cnt
 /data/_RAW_DATASETS
-/data/Covid
+/data/COVID
 /data/ECG
-/data/Electricity
+/data/ELECTRICITY
 /data/METR-LA
-/data/Solar
-/data/Wiki
+/data/SOLAR
+/data/WIKI
+/data/TRAFFIC
 /__pycache__
 *.pyc
 /output
