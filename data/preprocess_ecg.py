@@ -1,55 +1,59 @@
-import os
-import json
+import os, json
 import numpy as np
-import pandas as pd
+from tqdm import tqdm
+from pathlib import Path
 
-train_path = "AAA/DownloadECG5000/ECG5000_TRAIN.txt"
-test_path  = "AAA/DownloadECG5000/ECG5000_TEST.txt"
+BASE_DIR = Path(__file__).resolve().parent
+TRAIN_TXT = BASE_DIR / "_RAW_DATASETS" / "ECG" / "ECG5000_TRAIN.txt"
+TEST_TXT = BASE_DIR / "_RAW_DATASETS" / "ECG" / "ECG5000_TEST.txt"
+OUT_DIR = BASE_DIR / "ECG"
+TRAIN_RATIO = 0.7
+VAL_RATIO = 0.2
 
-train_df = pd.read_csv(train_path, header=None, sep=r"\s+")
-test_df  = pd.read_csv(test_path,  header=None, sep=r"\s+")
+os.makedirs(OUT_DIR, exist_ok=True)
 
-train_data = train_df.iloc[:, 1:].values
-test_data  = test_df.iloc[:, 1:].values
+def load_txt(path):
+    data = np.loadtxt(path)
+    return data[:, 1:]
 
-all_data = np.vstack([train_data, test_data])
+train_raw = load_txt(TRAIN_TXT)
+test_raw = load_txt(TEST_TXT)
 
-data = all_data.T.astype(np.float32)
-mean = data.mean(axis=0, keepdims=True)
-std  = data.std(axis=0, keepdims=True)
-std[std == 0] = 1.0
-data = (data - mean) / std
+data = np.concatenate([train_raw, test_raw], axis=0).astype(np.float32)
+T, L = data.shape
 
-T = data.shape[0]
-t_train = int(0.7 * T)
-t_val   = int(0.9 * T)
+min_v = data.min()
+max_v = data.max()
+data = (data - min_v) / (max_v - min_v + 1e-8)
 
-train = data[:t_train]
-val   = data[t_train:t_val]
-test  = data[t_val:]
+train_end = int(T * TRAIN_RATIO)
+val_end = int(T * (TRAIN_RATIO + VAL_RATIO))
 
-out_dir = "ECG"
-os.makedirs(out_dir, exist_ok=True)
-
-np.save(os.path.join(out_dir, "train.npy"), train)
-np.save(os.path.join(out_dir, "val.npy"),   val)
-np.save(os.path.join(out_dir, "test.npy"),  test)
-
-meta = {
-    "dataset": "ECG5000",
-    "source": "UCR Time Series Archive",
-    "original_shape": {
-        "num_series": int(all_data.shape[0]),
-        "time_steps": int(all_data.shape[1])
-    },
-    "final_shape": {
-        "train": list(train.shape),
-        "val": list(val.shape),
-        "test": list(test.shape)
-    },
-    "normalization": "z-score",
-    "split": "7:2:1"
+splits = {
+    "train": data[:train_end],
+    "val": data[train_end:val_end],
+    "test": data[val_end:]
 }
 
-with open(os.path.join(out_dir, "meta.json"), "w") as f:
-    json.dump(meta, f, indent=2)
+for k in tqdm(splits, desc="Saving Splits", leave=True):
+    np.save(os.path.join(OUT_DIR, f"{k}.npy"), splits[k])
+    
+metadata = {
+    "dataset": "ECG5000",
+    "num_samples": T,
+    "signal_length": L,
+    "normalization": "min-max (global)",
+    "splits": {
+        "train": splits["train"].shape,
+        "val":   splits["val"].shape,
+        "test":  splits["test"].shape
+    },
+    "train_ratio": TRAIN_RATIO,
+    "val_ratio": VAL_RATIO,
+    "test_ratio": 1.0 - TRAIN_RATIO - VAL_RATIO
+}
+
+with open(os.path.join(OUT_DIR, "metadata.json"), "w") as f:
+    json.dump(metadata, f, indent=2)
+    
+print("Preprocessing complete.")

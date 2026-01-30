@@ -1,53 +1,61 @@
 import os, json
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from pathlib import Path
 
-os.makedirs('Covid', exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent
+CSV_PATH = BASE_DIR / "_RAW_DATASETS" / "COVID" / "covid.csv"
+OUT_DIR = BASE_DIR / "COVID"
+DATE_COL = "date"
+TRAIN_RATIO = 0.6
+VAL_RATIO = 0.2
 
-df = pd.read_csv("AAA/time_series_covid19_confirmed_US.csv")
-date_cols = df.columns[df.columns.str.match(r"\d+/\d+/\d+")].tolist()
+os.makedirs(OUT_DIR, exist_ok=True)
 
-state_time_series = (
-    df.groupby("Province_State")[date_cols]
-    .sum()
-)
-states = state_time_series.index.tolist()
-dates = date_cols
+df = pd.read_csv(CSV_PATH)
+df[DATE_COL] = pd.to_datetime(df[DATE_COL])
+df = df.sort_values(DATE_COL)
 
-data = state_time_series.values.T.astype(np.float32)
-mean = data.mean(0, keepdims=True)
-std = data.std(0, keepdims=True)
-std[std == 0] = 1.0
-data = (data - mean) / std
+ts_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+df = df[ts_cols]
+
+data = df.values.astype(np.float32)
+mins = data.min(axis=0)
+maxs = data.max(axis=0)
+data = (data - mins) / (maxs - mins + 1e-8)
 
 T = data.shape[0]
-t1 = int(0.6 * T)
-t2 = int(0.8 * T)
+train_end = int(T * TRAIN_RATIO)
+val_end = int(T * (TRAIN_RATIO + VAL_RATIO))
 
-train = data[:t1]
-val = data[t1:t2]
-test = data[t2:]
-
-np.save("Covid/train.npy", train)
-np.save("Covid/val.npy", val)
-np.save("Covid/test.npy", test)
-
-meta = {
-    "states": states,
-    "dates": dates,
-    "normalization": {
-        "type": "z-score",
-        "mean": mean.flatten().tolist(),
-        "std": std.flatten().tolist()
-    },
-    "split": "6:2:2",
-    "shape": {
-        "train": list(train.shape),
-        "val": list(val.shape),
-        "test": list(test.shape)
-    }
+splits = {
+    "train": data[:train_end],
+    "val": data[train_end:val_end],
+    "test": data[val_end:],
 }
 
-with open(os.path.join("Covid", "meta.json"), "w") as f:
-    json.dump(meta, f, indent=2)
+for k in tqdm(splits, desc="Saving Splits", leave=True):
+    np.save(os.path.join(OUT_DIR, f"{k}.npy"), splits[k])
     
+metadata = {
+    "dataset": "COVID-19 California Hospitalizations",
+    "num_timesteps": T,
+    "num_nodes": data.shape[1],
+    "granularity": "1 day",
+    "normalization": "min-max (per variable, global)",
+    "splits": {
+        "train": splits["train"].shape,
+        "val": splits["val"].shape,
+        "test": splits["test"].shape
+    },
+    "train_ratio": TRAIN_RATIO,
+    "val_ratio": VAL_RATIO,
+    "test_ratio": 1.0 - TRAIN_RATIO - VAL_RATIO,
+    "columns": ts_cols
+}
+
+with open(os.path.join(OUT_DIR, "metadata.json"), "w") as f:
+    json.dump(metadata, f, indent=2)
+    
+print("Preprocessing Complete")

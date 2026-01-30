@@ -1,72 +1,80 @@
-import os, json
+import os, json, glob
 import numpy as np
 import pandas as pd
-from functools import reduce
+from tqdm import tqdm
+from pathlib import Path
 
-RAW_DIR = "AAA/florida-solar"
-OUT_DIR = "Solar"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "_RAW_DATASETS" / "SOLAR"
+OUT_DIR = BASE_DIR / "SOLAR"
+TRAIN_RATIO = 0.7
+VAL_RATIO = 0.2
+EPS = 1e-8
+TIME_COL = "LocalTime"
+VALUE_COL = "Power(MW)"
+DATE_FORMAT = "%m/%d/%y %H:%M"
+
 os.makedirs(OUT_DIR, exist_ok=True)
 
-TIME_COL_CANDIDATES = ["time", "LocalTime"]
-VALUE_COL_CANDIDATES = ["value", "Power(MW)"]
+csv_files = sorted(glob.glob(os.path.join(DATA_DIR, "*.csv")))
+assert len(csv_files) > 0, "No CSV files found in the dataset directory."
 
-series_list = []
-site_names = []
-
-for fname in sorted(os.listdir(RAW_DIR)):
-    if not fname.endswith(".csv"):
-        continue
-    
-    path = os.path.join(RAW_DIR, fname)
+dfs = []
+for path in tqdm(csv_files, desc="Loading CSV files", leave=True):
     df = pd.read_csv(path)
+
+    df[TIME_COL] = pd.to_datetime(df[TIME_COL], format=DATE_FORMAT)
+    df = df.sort_values(TIME_COL)
+    df = df.set_index(TIME_COL)
+
+    # Keep only the value column
+    dfs.append(df[[VALUE_COL]])
     
-    time_col = next(c for c in TIME_COL_CANDIDATES if c in df.columns)
-    value_col = next(c for c in VALUE_COL_CANDIDATES if c in df.columns)
-    
-    df = df[[time_col, value_col]].copy()
-    df[time_col] = pd.to_datetime(
-        df[time_col],
-        format="%m/%d/%y %H:%M",
-        errors="raise"
-    )
-    df = df.sort_values(time_col)
-    df = df.rename(columns={value_col: fname.replace(".csv", "")})
-    df = df.set_index(time_col)
-    series_list.append(df)
-    site_names.append(fname.replace(".csv", ""))
-    
-merged = reduce(lambda left, right: left.join(right, how='inner'), series_list)
+merged = pd.concat(dfs, axis=1, join="inner")
+merged.columns = list(range(len(dfs)))
 data = merged.values.astype(np.float32)
+timesteps = merged.index.values
+T, N = data.shape
 
-mean = data.mean(axis=0, keepdims=True)
-std = data.std(axis=0, keepdims=True)
-std[std == 0] = 1.0
-data = (data - mean) / std
+print(f"Aligned timesteps: {T}")
+print(f"Number of sites: {N}")
+print(f"Time range: {merged.index[0]} → {merged.index[-1]}")
 
-t1 = int(data.shape[0] * 0.7)
-t2 = int(data.shape[0] * 0.9)
-train = data[:t1]
-val = data[t1:t2]
-test = data[t2:]
+mins = data.min(axis=0)
+maxs = data.max(axis=0)
+norm_data = np.empty_like(data)
+for i in tqdm(range(N), desc="Normalizing", leave=True):
+    norm_data[:, i] = (data[:, i] - mins[i]) / (maxs[i] - mins[i] + EPS)
+    
+train_end = int(T * TRAIN_RATIO)
+val_end = int(T * (TRAIN_RATIO + VAL_RATIO))
 
-np.save(os.path.join(OUT_DIR, "train.npy"), train)
-np.save(os.path.join(OUT_DIR, "val.npy"), val)
-np.save(os.path.join(OUT_DIR, "test.npy"), test)
+train = norm_data[:train_end]
+val = norm_data[train_end:val_end]
+test = norm_data[val_end:]
 
-meta = {
+for name, arr in tqdm(
+    [("train", train), ("val", val), ("test", test)],
+    desc="Saving Splits", leave=True):
+    np.save(os.path.join(OUT_DIR, f"{name}.npy"), arr)
+    
+metadata = {
     "dataset": "Solar",
-    "num_sites": len(site_names),
-    "timestamps": merged.index.astype(str).tolist(),
-    "sites": site_names,
-    "normalization": "z-score",
-    "split": "7:2:1",
-    "shapes": {
-        "train": list(train.shape),
-        "val": list(val.shape),
-        "test": list(test.shape)
-    }
+    "num_timesteps": T,
+    "num_sites": N,
+    "granularity": "5 minutes",
+    "normalization": "min-max per site",
+    "splits": {
+        "train": train.shape,
+        "val": val.shape,
+        "test": test.shape
+    },
+    "train_ratio": TRAIN_RATIO,
+    "val_ratio": VAL_RATIO,
+    "test_ratio": 1.0 - TRAIN_RATIO - VAL_RATIO
 }
 
-with open(os.path.join(OUT_DIR, "meta.json"), "w") as f:
-    json.dump(meta, f, indent=2)
+with open(os.path.join(OUT_DIR, "metadata.json"), "w") as f:
+    json.dump(metadata, f, indent=2)
     
+print("Preprocessing Complete")
