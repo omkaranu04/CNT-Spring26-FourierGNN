@@ -16,90 +16,23 @@ def load_split(root_path, flag):
     return np.load(path)
 
 
-# Traffic Dataset (formerly DHFM)
-class Dataset_DHFM(Dataset):
-    def __init__(self, root_path, flag, seq_len, pre_len, type, train_ratio, val_ratio):
-        assert flag in ["train", "val", "test"]
-
-        self.flag = flag
-        self.seq_len = seq_len
-        self.pre_len = pre_len
-
-        data = load_split(root_path, flag)
-
-        # optional scaling (kept for compatibility)
-        if type == "1":
-            mms = MinMaxScaler()
-            data = mms.fit_transform(data)
-
-        self.data = data
-
-    def __getitem__(self, idx):
-        x = self.data[idx : idx + self.seq_len]
-        y = self.data[idx + self.seq_len : idx + self.seq_len + self.pre_len]
-        return x, y
-
-    def __len__(self):
-        return len(self.data) - self.seq_len - self.pre_len
-
-
-# ECG / COVID / Electricity / METR
-class Dataset_ECG(Dataset):
-    def __init__(self, root_path, flag, seq_len, pre_len, type, train_ratio, val_ratio):
-        assert flag in ["train", "val", "test"]
-
-        self.flag = flag
-        self.seq_len = seq_len
-        self.pre_len = pre_len
-
-        data = load_split(root_path, flag)
-
-        # optional scaling (kept)
-        if type == "1":
-            mms = MinMaxScaler()
-            data = mms.fit_transform(data)
-
-        self.data = data
-
-    def __getitem__(self, idx):
-        x = self.data[idx : idx + self.seq_len]
-        y = self.data[idx + self.seq_len : idx + self.seq_len + self.pre_len]
-        return x, y
-
-    def __len__(self):
-        return len(self.data) - self.seq_len - self.pre_len
-
-
-# Solar Dataset
-class Dataset_Solar(Dataset):
-    def __init__(self, root_path, flag, seq_len, pre_len, type, train_ratio, val_ratio):
-        assert flag in ["train", "val", "test"]
-
-        self.flag = flag
-        self.seq_len = seq_len
-        self.pre_len = pre_len
-
-        data = load_split(root_path, flag)
-
-        # optional scaling
-        if type == "1":
-            mms = MinMaxScaler()
-            data = mms.fit_transform(data)
-
-        self.data = data
-
-    def __getitem__(self, idx):
-        x = self.data[idx : idx + self.seq_len]
-        y = self.data[idx + self.seq_len : idx + self.seq_len + self.pre_len]
-        return x, y
-
-    def __len__(self):
-        return len(self.data) - self.seq_len - self.pre_len
-
-
-# Wiki Dataset
-class Dataset_Wiki(Dataset):
-    def __init__(self, root_path, flag, seq_len, pre_len, type, train_ratio, val_ratio):
+# Unified Dataset class for all datasets
+class TimeSeriesDataset(Dataset):
+    """
+    Unified dataset class for all time series datasets (TRAFFIC, ECG, COVID, 
+    ELECTRICITY, METR-LA, SOLAR, WIKI).
+    """
+    def __init__(self, root_path, flag, seq_len, pre_len, type, train_ratio=None, val_ratio=None):
+        """
+        Args:
+            root_path: Path to the dataset folder (e.g., 'data/WIKI/')
+            flag: 'train', 'val', or 'test'
+            seq_len: Length of input sequence
+            pre_len: Length of prediction horizon
+            type: '1' for MinMaxScaler normalization, else no scaling
+            train_ratio: (unused, kept for backward compatibility)
+            val_ratio: (unused, kept for backward compatibility)
+        """
         assert flag in ["train", "val", "test"]
 
         self.flag = flag

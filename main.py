@@ -4,8 +4,9 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import DataLoader
 from utils.utils import save_model, load_model, evaluate
-from data.a_data_loader import Dataset_DHFM, Dataset_ECG, Dataset_Solar, Dataset_Wiki
+from data.data_loader import TimeSeriesDataset
 from model.FourierGNN import FGN
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='fourier graph network for multivariate time series forecasting')
 parser.add_argument('--data', type=str, default='ECG', help='data set')
@@ -36,30 +37,22 @@ if not os.path.exists(result_test_file):
     os.makedirs(result_test_file)
     
 data_parser = {
-    'ECG':{'root_path':'./data/ECG', 'type':'0'},
-    'Covid':{'root_path':'./data/Covid', 'type':'1'},
-    'electricity':{'root_path':'./data/Electricity', 'type':'1'},
-    'wiki':{'root_path':'./data/Wiki', 'type':'1'},
-    'metr':{'root_path':'./data/METR-LA', 'type':'1'},
-    'solar':{'root_path':'./data/Solar', 'type':'1'}
+    'TRAFFIC':{'root_path':'./data/TRAFFIC', 'type':'0'},
+    'ECG':{'root_path':'./data/ECG', 'type':'1'},
+    'COVID':{'root_path':'./data/COVID', 'type':'1'},
+    'ELECTRICITY':{'root_path':'./data/ELECTRICITY', 'type':'1'},
+    'WIKI':{'root_path':'./data/WIKI', 'type':'1'},
+    'METR-LA':{'root_path':'./data/METR-LA', 'type':'1'},
+    'SOLAR':{'root_path':'./data/SOLAR', 'type':'1'}
 }
 
 if args.data in data_parser.keys():
     data_info = data_parser[args.data]
-    
-data_dict = {
-    'ECG': Dataset_ECG,
-    'wiki': Dataset_Wiki,
-    'solar': Dataset_Solar,
-    'Covid': Dataset_DHFM,
-    'electricity': Dataset_DHFM,
-    'metr': Dataset_DHFM
-}
 
-Data = data_dict[args.data]
-train_set = Data(data_info['root_path'], 'train', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
-val_set = Data(data_info['root_path'], 'val', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
-test_set = Data(data_info['root_path'], 'test', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
+# Use unified TimeSeriesDataset for all datasets
+train_set = TimeSeriesDataset(data_info['root_path'], 'train', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
+val_set = TimeSeriesDataset(data_info['root_path'], 'val', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
+test_set = TimeSeriesDataset(data_info['root_path'], 'test', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
 
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
 val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
@@ -79,14 +72,14 @@ def validate(model, vali_loader):
     loss_total = 0
     preds = []
     trues = []
-    for i, (x, y) in enumerate(vali_loader):
+    for i, (x, y) in tqdm(enumerate(vali_loader), total=len(vali_loader), desc='Validating', leave=True):
         cnt += 1
         y = y.float().to("cuda:0")
         x = x.float().to("cuda:0")
         forecast = model(x)
         y = y.permute(0, 2, 1).contiguous()
         loss = forecast_loss(forecast, y)
-        loss_total += float(loss)
+        loss_total += loss.item()
         forecast = forecast.detach().cpu().numpy()  # .squeeze()
         y = y.detach().cpu().numpy()  # .squeeze()
         preds.append(forecast)
@@ -105,7 +98,7 @@ def test():
     preds = []
     trues = []
     sne = []
-    for index, (x, y) in enumerate(test_loader):
+    for index, (x, y) in tqdm(enumerate(test_loader), total=len(test_loader), desc='Testing', leave=True):
         y = y.float().to("cuda:0")
         x = x.float().to("cuda:0")
         forecast = model(x)
@@ -126,7 +119,7 @@ if __name__ == '__main__':
         model.train()
         loss_total = 0
         cnt = 0
-        for index, (x, y) in enumerate(train_loader):
+        for index, (x, y) in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training', leave=True):
             cnt += 1
             y = y.float().to("cuda:0")
             x = x.float().to("cuda:0")
@@ -135,7 +128,7 @@ if __name__ == '__main__':
             loss = forecast_loss(forecast, y)
             loss.backward()
             my_optim.step()
-            loss_total += float(loss)
+            loss_total += loss.item()
 
         if (epoch + 1) % args.exponential_decay_step == 0:
             my_lr_scheduler.step()
