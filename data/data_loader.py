@@ -22,7 +22,7 @@ class TimeSeriesDataset(Dataset):
     Unified dataset class for all time series datasets (TRAFFIC, ECG, COVID, 
     ELECTRICITY, METR-LA, SOLAR, WIKI).
     """
-    def __init__(self, root_path, flag, seq_len, pre_len, type, train_ratio=None, val_ratio=None):
+    def __init__(self, root_path, flag, seq_len, pre_len, type):
         """
         Args:
             root_path: Path to the dataset folder (e.g., 'data/WIKI/')
@@ -41,7 +41,6 @@ class TimeSeriesDataset(Dataset):
 
         data = load_split(root_path, flag)
 
-        # optional scaling
         if type == "1":
             mms = MinMaxScaler()
             data = mms.fit_transform(data)
