@@ -13,7 +13,7 @@ parser.add_argument('--data', type=str, default='ECG', help='data set')
 parser.add_argument('--feature_size', type=int, default='140', help='feature size')
 parser.add_argument('--seq_length', type=int, default=12, help='inout length')
 parser.add_argument('--pre_length', type=int, default=12, help='predict length')
-parser.add_argument('--embed_size', type=int, default=128, help='hidden dimensions')
+parser.add_argument('--embedding_size', type=int, default=128, help='hidden dimensions')
 parser.add_argument('--hidden_size', type=int, default=256, help='hidden dimensions')
 parser.add_argument('--train_epochs', type=int, default=100, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=32, help='input data batch size')
@@ -50,16 +50,16 @@ if args.data in data_parser.keys():
     data_info = data_parser[args.data]
 
 # Use unified TimeSeriesDataset for all datasets
-train_set = TimeSeriesDataset(data_info['root_path'], 'train', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
-val_set = TimeSeriesDataset(data_info['root_path'], 'val', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
-test_set = TimeSeriesDataset(data_info['root_path'], 'test', args.seq_length, args.pre_length, data_info['type'], args.train_ratio, args.val_ratio)
+train_set = TimeSeriesDataset(data_info['root_path'], 'train', args.seq_length, args.pre_length, data_info['type'])
+val_set = TimeSeriesDataset(data_info['root_path'], 'val', args.seq_length, args.pre_length, data_info['type'])
+test_set = TimeSeriesDataset(data_info['root_path'], 'test', args.seq_length, args.pre_length, data_info['type'])
 
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
-val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
+val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
 device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-model = FGN(pre_length=args.pre_length, embed_size=args.embed_size, feature_size=args.feature_size, seq_length=args.seq_length, hidden_size=args.hidden_size)
+model = FGN(pre_length=args.pre_length, embed_size=args.embedding_size, feature_size=args.feature_size, seq_length=args.seq_length, hidden_size=args.hidden_size)
 model.to(device)
 my_optim = torch.optim.RMSprop(params=model.parameters(), lr=args.learning_rate, eps=1e-08)
 my_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=my_optim, gamma=args.decay_rate)
@@ -72,7 +72,7 @@ def validate(model, vali_loader):
     loss_total = 0
     preds = []
     trues = []
-    for i, (x, y) in tqdm(enumerate(vali_loader), total=len(vali_loader), desc='Validating', leave=True):
+    for i, (x, y) in tqdm(enumerate(vali_loader), total=len(vali_loader), desc='Validating', leave=False):
         cnt += 1
         y = y.float().to("cuda:0")
         x = x.float().to("cuda:0")
@@ -87,7 +87,7 @@ def validate(model, vali_loader):
     preds = np.concatenate(preds, axis=0)
     trues = np.concatenate(trues, axis=0)
     score = evaluate(trues, preds)
-    print(f'RAW : MAPE {score[0]:7.9%}; MAE {score[1]:7.9f}; RMSE {score[2]:7.9f}.')
+    print(f'RAW : MAE {score[1]:7.9f}; RMSE {score[2]:7.9f}; MAPE {score[0]:7.9%}.')
     model.train()
     return loss_total/cnt
 
@@ -98,7 +98,7 @@ def test():
     preds = []
     trues = []
     sne = []
-    for index, (x, y) in tqdm(enumerate(test_loader), total=len(test_loader), desc='Testing', leave=True):
+    for index, (x, y) in tqdm(enumerate(test_loader), total=len(test_loader), desc='Testing', leave=False):
         y = y.float().to("cuda:0")
         x = x.float().to("cuda:0")
         forecast = model(x)
@@ -111,7 +111,7 @@ def test():
     preds = np.concatenate(preds, axis=0)
     trues = np.concatenate(trues, axis=0)
     score = evaluate(trues, preds)
-    print(f'RAW : MAPE {score[0]:7.9%}; MAE {score[1]:7.9f}; RMSE {score[2]:7.9f}.')
+    print(f'RAW : MAE {score[1]:7.9f}; RMSE {score[2]:7.9f}; MAPE {score[0]:7.9%}.')
     
 if __name__ == '__main__':
     for epoch in range(args.train_epochs):
@@ -119,10 +119,11 @@ if __name__ == '__main__':
         model.train()
         loss_total = 0
         cnt = 0
-        for index, (x, y) in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training', leave=True):
+        for index, (x, y) in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training', leave=False):
             cnt += 1
             y = y.float().to("cuda:0")
             x = x.float().to("cuda:0")
+            my_optim.zero_grad()
             forecast = model(x)
             y = y.permute(0, 2, 1).contiguous()
             loss = forecast_loss(forecast, y)
@@ -136,7 +137,7 @@ if __name__ == '__main__':
             val_loss = validate(model, val_loader)
 
         print('| end of epoch {:3d} | time: {:5.2f}s | train_total_loss {:5.4f} | val_loss {:5.4f}'.format(
-                epoch, (time.time() - epoch_start_time), loss_total / cnt, val_loss))
-        save_model(model, result_train_file, epoch)
+                epoch + 1, (time.time() - epoch_start_time), loss_total / cnt, val_loss))
+        save_model(model, result_train_file, epoch + 1)
         
         
