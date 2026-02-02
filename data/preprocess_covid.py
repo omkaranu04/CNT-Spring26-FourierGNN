@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from sklearn.preprocessing import MinMaxScaler
 
 BASE_DIR = Path(__file__).resolve().parent
 CSV_PATH = BASE_DIR / "_RAW_DATASETS" / "COVID" / "covid.csv"
@@ -26,12 +27,12 @@ T = data.shape[0]
 train_end = int(T * TRAIN_RATIO)
 val_end = int(T * (TRAIN_RATIO + VAL_RATIO))
 
-train_data = data[:train_end]
+# Fit MinMaxScaler ONLY on training data (matching Dataset_ECG)
+mms = MinMaxScaler(feature_range=(0, 1))
+mms.fit(data[:train_end])
 
-mins = train_data.min(axis=0)
-maxs = train_data.max(axis=0)
-
-data = (data - mins) / (maxs - mins + 1e-8)
+# Transform entire dataset using training statistics
+data = mms.transform(data)
 
 splits = {
     "train": data[:train_end],
@@ -47,7 +48,7 @@ metadata = {
     "num_timesteps": T,
     "num_nodes": data.shape[1],
     "granularity": "1 day",
-    "normalization": "min-max (train-only, per variable)",
+    "normalization": "min-max (fitted on train only, sklearn MinMaxScaler)",
     "splits": {
         "train": splits["train"].shape,
         "val": splits["val"].shape,

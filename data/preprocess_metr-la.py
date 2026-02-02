@@ -2,6 +2,7 @@ import os, json, h5py
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
+from sklearn.preprocessing import MinMaxScaler
 
 BASE_DIR = Path(__file__).resolve().parent
 H5_PATH = BASE_DIR / "_RAW_DATASETS" / "METR-LA" / "METR-LA.h5"
@@ -9,7 +10,6 @@ DATASET_KEY = "df/block0_values"
 OUT_DIR = BASE_DIR / "METR-LA"
 TRAIN_RATIO = 0.7
 VAL_RATIO = 0.2
-EPS = 1e-8
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -55,16 +55,15 @@ else:
     transposed = False
 T, N = data.shape
 
-mins = data.min(axis=0)
-maxs = data.max(axis=0)
-den = maxs - mins + EPS
-norm_data = np.empty_like(data, dtype=np.float32)
-
-for j in tqdm(range(N), desc="Normalizing Columns", leave=True):
-    norm_data[:, j] = (data[:, j] - mins[j]) / den[j]
-    
 train_end = int(T * TRAIN_RATIO)
 val_end = int(T * (TRAIN_RATIO + VAL_RATIO))
+
+# Fit MinMaxScaler ONLY on training data (matching Dataset_ECG)
+mms = MinMaxScaler(feature_range=(0, 1))
+mms.fit(data[:train_end])
+
+# Transform entire dataset using training statistics
+norm_data = mms.transform(data)
 
 train = norm_data[:train_end]
 val = norm_data[train_end:val_end]
@@ -81,9 +80,7 @@ metadata = {
     "num_timesteps": T,
     "num_nodes": N,
     "granularity": "5 minutes (METR-LA standard) -- verify if needed",
-    "normalization": "min-max per variable (column) with epsilon",
-    "min_per_column": mins.tolist(),
-    "max_per_column": maxs.tolist(),
+    "normalization": "min-max (fitted on train only, sklearn MinMaxScaler)",
     "splits": {
         "train": train.shape,
         "val": val.shape,
