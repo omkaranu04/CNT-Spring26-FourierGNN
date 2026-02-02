@@ -82,7 +82,7 @@ class FGN(nn.Module):
         x = x.reshape(B, (N * L) // 2 + 1, self.embed_size)
         x = torch.fft.irfft(x, n=N * L, dim=1, norm='ortho')
         x = x.reshape(B, N, L, self.embed_size)
-        x = x.permute(0, 3, 1, 2)
+        x = x.permute(0, 1, 3, 2)
         x = torch.matmul(x, self.embeddings_10)
         x = x.reshape(B, N, -1)
         x = self.fc(x)

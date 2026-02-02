@@ -13,7 +13,7 @@ def load_split(root_path, flag):
     path = os.path.join(root_path, fname)
     if not os.path.exists(path):
         raise FileNotFoundError(f"{path} not found")
-    return np.load(path)
+    return np.load(path).astype(np.float32)
 
 
 # Unified Dataset class for all datasets
