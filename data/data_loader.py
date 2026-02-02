@@ -40,11 +40,6 @@ class TimeSeriesDataset(Dataset):
         self.pre_len = pre_len
 
         data = load_split(root_path, flag)
-
-        if type == "1":
-            mms = MinMaxScaler()
-            data = mms.fit_transform(data)
-
         self.data = data
 
     def __getitem__(self, idx):
