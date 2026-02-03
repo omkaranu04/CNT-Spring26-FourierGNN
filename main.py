@@ -54,6 +54,16 @@ train_set = TimeSeriesDataset(data_info['root_path'], 'train', args.seq_length, 
 val_set = TimeSeriesDataset(data_info['root_path'], 'val', args.seq_length, args.pre_length, data_info['type'])
 test_set = TimeSeriesDataset(data_info['root_path'], 'test', args.seq_length, args.pre_length, data_info['type'])
 
+sample_x, sample_y = train_set[0]
+actual_feature_size = sample_x.shape[-1]
+print(f"\n{'='*60}")
+print(f"Dataset: {args.data}")
+print(f"Sample input shape: {sample_x.shape} (should be [{args.seq_length}, feature_size])")
+print(f"Sample target shape: {sample_y.shape} (should be [{args.pre_length}, feature_size])")
+print(f"Detected feature_size: {actual_feature_size}")
+print(f"Configured feature_size: {args.feature_size}")
+print(f"\n{'='*60}")
+
 train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
 val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
@@ -123,7 +133,6 @@ if __name__ == '__main__':
             cnt += 1
             y = y.float().to("cuda:0")
             x = x.float().to("cuda:0")
-            my_optim.zero_grad()
             forecast = model(x)
             y = y.permute(0, 2, 1).contiguous()
             loss = forecast_loss(forecast, y)

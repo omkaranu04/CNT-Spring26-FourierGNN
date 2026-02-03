@@ -12,3 +12,8 @@ CNT Project Description.pdf
 /__pycache__
 *.pyc
 /output
+output*.txt
+err*.txt
+output*.log
+err*.log
+nohup.out
