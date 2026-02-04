@@ -13,3 +13,5 @@ CNT Project Description.pdf
 *.pyc
 /output
 /gnn
+err*.txt
+output*.txt
